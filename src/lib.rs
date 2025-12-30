@@ -33,7 +33,7 @@ pub fn get_client(config: &Config) -> reqwest::Client {
 pub async fn get_drive_client(credentials: Credentials) -> Result<reqwest::Client, AppError> {
     let auth = InstalledFlowAuthenticator::builder(
         credentials.into(),
-        yup_oauth2::InstalledFlowReturnMethod::HTTPRedirect,
+        yup_oauth2::InstalledFlowReturnMethod::Interactive,
     )
     .persist_tokens_to_disk("token_cache.json")
     .build()
