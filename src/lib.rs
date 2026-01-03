@@ -1,7 +1,24 @@
+use std::future::Future;
+use std::pin::Pin;
+
 use reqwest::header::AUTHORIZATION;
 use yup_oauth2::InstalledFlowAuthenticator;
 
 use crate::{config::Config, credentials::Credentials, errors::AppError};
+
+struct NoInteractionDelegate;
+
+impl yup_oauth2::authenticator_delegate::InstalledFlowDelegate for NoInteractionDelegate {
+    fn present_user_url<'a>(
+        &'a self,
+        _url: &'a str,
+        _need_code: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>> {
+        Box::pin(async {
+            Err("Interaction required but disabled. Use --auth to allow.".to_string())
+        })
+    }
+}
 
 pub mod backup;
 pub mod config;
@@ -30,15 +47,21 @@ pub fn get_client(config: &Config) -> reqwest::Client {
         .unwrap()
 }
 
-pub async fn get_drive_client(credentials: Credentials) -> Result<reqwest::Client, AppError> {
-    let auth = InstalledFlowAuthenticator::builder(
+pub async fn get_drive_client(
+    credentials: Credentials,
+    allow_auth: bool,
+) -> Result<reqwest::Client, AppError> {
+    let mut builder = InstalledFlowAuthenticator::builder(
         credentials.into(),
         yup_oauth2::InstalledFlowReturnMethod::Interactive,
     )
-    .persist_tokens_to_disk("token_cache.json")
-    .build()
-    .await
-    .map_err(AppError::Io)?;
+    .persist_tokens_to_disk("token_cache.json");
+
+    if !allow_auth {
+        builder = builder.flow_delegate(Box::new(NoInteractionDelegate));
+    }
+
+    let auth = builder.build().await.map_err(AppError::Io)?;
 
     let scopes = &["https://www.googleapis.com/auth/drive"];
 
@@ -65,4 +88,22 @@ pub async fn get_drive_client(credentials: Credentials) -> Result<reqwest::Clien
         .unwrap();
 
     Ok(client)
+}
+
+pub async fn send_discord_webhook(config: &Config, message: &str) -> Result<(), AppError> {
+    let client = reqwest::Client::new();
+    let res = client
+        .post(&config.webhook_url)
+        .json(&serde_json::json!({ "content": message }))
+        .send()
+        .await
+        .map_err(AppError::Request)?;
+
+    if !res.status().is_success() {
+        return Err(AppError::Response(format!(
+            "Failed to send webhook: HTTP {}",
+            res.status().as_u16()
+        )));
+    }
+    Ok(())
 }

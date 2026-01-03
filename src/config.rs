@@ -10,6 +10,7 @@ pub struct Config {
     pub server_id: String,
     pub drive_folder_id: String,
     pub max_backups: usize,
+    pub webhook_url: String,
 }
 
 impl Default for Config {
@@ -21,6 +22,8 @@ impl Default for Config {
             server_id: "2f615648".into(),
             drive_folder_id: "0BwwA4oUTeiV1TGRPeTVjaWRDY1E".into(),
             max_backups: 5,
+            webhook_url: "https://discord.com/api/webhooks/your_webhook_id/your_webhook_token"
+                .into(),
         }
     }
 }
